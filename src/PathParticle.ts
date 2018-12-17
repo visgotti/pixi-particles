@@ -111,7 +111,25 @@ export default class PathParticle extends Particle
 	 * @property {Number} movement
 	 */
 	public movement: number;
-	
+
+	/**
+	 * Max X you want for your path function to contain
+	 * @property {Number} movement
+	 */
+	public max_x?: number;
+
+	/**
+	 * Min X you want for your path to contain
+	 * @property {Number} movement
+	 */
+	public min_x?: number;
+	/**
+	 * If the path is static and doesn't change depending on time.
+	 * @property {Number} movement
+	 */
+	public isStatic: boolean;
+
+
 	constructor(emitter: Emitter)
 	{
 		super(emitter);
@@ -119,6 +137,9 @@ export default class PathParticle extends Particle
 		this.initialRotation = 0;
 		this.initialPosition = new PIXI.Point();
 		this.movement = 0;
+		this.isStatic = false;
+		this.min_x = null;
+		this.max_x = null;
 	}
 
 	/**
@@ -135,6 +156,13 @@ export default class PathParticle extends Particle
 
 		//set the path for the particle
 		this.path = this.extraData.path;
+
+		// set if the path is static
+		this.isStatic = this.extraData.isStatic;
+
+		this.min_x = this.isStatic ? this.extraData.min_x : null;
+		this.max_x = this.isStatic ? this.extraData.max_x : null;
+
 		//cancel the normal movement behavior
 		this._doNormalMovement = !this.path;
 		//reset movement
@@ -155,9 +183,15 @@ export default class PathParticle extends Particle
 		//if the particle died during the update, then don't bother
 		if(lerp >= 0 && this.path)
 		{
-			//increase linear movement based on speed
-			const speed = this.speedList.interpolate(lerp) * this.speedMultiplier;
-			this.movement += speed * delta;
+			if(this.isStatic) {
+				// get movement based on random position
+				this.movement = ParticleUtils.getRandomInt(this.min_x, this.max_x);
+			} else {
+				//increase linear movement based on speed
+				const speed = this.speedList.interpolate(lerp) * this.speedMultiplier;
+				this.movement += speed * delta;
+			}
+
 			//set up the helper point for rotation
 			helperPoint.x = this.movement;
 			helperPoint.y = this.path(this.movement);
@@ -202,14 +236,20 @@ export default class PathParticle extends Particle
 	 * @param  {Object} extraData The extra data from the particle config.
 	 * @return {Object} The parsed extra data.
 	 */
-	public static parseData(extraData: {path:string})
+	public static parseData(extraData: {path:string, isStatic:boolean, min_x:number, max_x:number})
 	{
 		let output: any = {};
+		output.isStatic = false;
 		if(extraData && extraData.path)
 		{
 			try
 			{
 				output.path = parsePath(extraData.path);
+				if(extraData.isStatic) {
+					output.isStatic = true;
+					output.min_x = extraData.min_x;
+					output.max_x = extraData.max_x;
+				}
 			}
 			catch(e)
 			{

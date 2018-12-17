@@ -1,6 +1,6 @@
 /*!
  * pixi-particles - v3.1.0
- * Compiled Wed, 29 Aug 2018 15:47:46 UTC
+ * Compiled Mon, 17 Dec 2018 19:39:38 UTC
  *
  * pixi-particles is licensed under the MIT License.
  * http://www.opensource.org/licenses/mit-license
@@ -232,6 +232,7 @@ var Emitter = /** @class */ (function () {
         this.spawnType = null;
         this._spawnFunc = null;
         this.spawnRect = null;
+        this.spawnLine = null;
         this.spawnCircle = null;
         this.particlesPerWave = 1;
         this.particleSpacing = 0;
@@ -429,7 +430,7 @@ var Emitter = /** @class */ (function () {
         // Emitter Properties   //
         //////////////////////////
         //reset spawn type specific settings
-        this.spawnRect = this.spawnCircle = null;
+        this.spawnLine = this.spawnRect = this.spawnCircle = null;
         this.particlesPerWave = 1;
         if (config.particlesPerWave && config.particlesPerWave > 1)
             this.particlesPerWave = config.particlesPerWave;
@@ -438,6 +439,12 @@ var Emitter = /** @class */ (function () {
         var spawnCircle;
         //determine the spawn function to use
         switch (config.spawnType) {
+            case "line":
+                this.spawnType = "line";
+                this._spawnFunc = this._spawnLine;
+                var spawnLine = config.spawnLine;
+                this.spawnLine = { startingPoint: spawnLine };
+                break;
             case "rect":
                 this.spawnType = "rect";
                 this._spawnFunc = this._spawnRect;
@@ -827,6 +834,30 @@ var Emitter = /** @class */ (function () {
         //drop the particle at the emitter's position
         p.position.x = emitPosX;
         p.position.y = emitPosY;
+    };
+    /**
+     * Positions a particle for a rectangle type emitter.
+     * @method PIXI.particles.Emitter# spawnLine
+     * @private
+     * @param {Particle} p The particle to position and rotate.
+     * @param {Number} emitPosX The emitter's x position
+     * @param {Number} emitPosY The emitter's y position
+     * @param {int} i The particle number in the current wave. Not used for this function.
+     */
+    Emitter.prototype._spawnLine = function (p, emitPosX, emitPosY) {
+        //set the initial rotation/direction of the particle based on starting
+        //particle angle and rotation of emitter
+        if (this.minStartRotation == this.maxStartRotation)
+            p.rotation = this.minStartRotation + this.rotation;
+        else
+            p.rotation = Math.random() * (this.maxStartRotation - this.minStartRotation) + this.minStartRotation + this.rotation;
+        //place the particle at a random point in the line
+        helperPoint.x = Math.random() * this.spawnRect.width + this.spawnRect.x;
+        helperPoint.y = Math.random() * this.spawnRect.height + this.spawnRect.y;
+        if (this.rotation !== 0)
+            ParticleUtils_1.default.rotatePoint(this.rotation, helperPoint);
+        p.position.x = emitPosX + helperPoint.x;
+        p.position.y = emitPosY + helperPoint.y;
     };
     /**
      * Positions a particle for a rectangle type emitter.
@@ -1328,6 +1359,14 @@ var ParticleUtils = {
     verbose: false,
     DEG_TO_RADS: Math.PI / 180,
     /**
+     * Gets random number between two numbers (inclusive)
+     * @param {Number} minimum number to return
+     * @param {Number} maximum number to return
+     */
+    getRandomInt: function (min, max) {
+        return Math.floor(Math.random() * (max - min + 1)) + min;
+    },
+    /**
      * Rotates a point by a given angle.
      * @method PIXI.particles.ParticleUtils.rotatePoint
      * @param {Number} angle The angle to rotate by in degrees
@@ -1603,6 +1642,9 @@ var PathParticle = /** @class */ (function (_super) {
         _this.initialRotation = 0;
         _this.initialPosition = new PIXI.Point();
         _this.movement = 0;
+        _this.isStatic = false;
+        _this.min_x = null;
+        _this.max_x = null;
         return _this;
     }
     /**
@@ -1617,6 +1659,10 @@ var PathParticle = /** @class */ (function (_super) {
         this.Particle_init();
         //set the path for the particle
         this.path = this.extraData.path;
+        // set if the path is static
+        this.isStatic = this.extraData.isStatic;
+        this.min_x = this.isStatic ? this.extraData.min_x : null;
+        this.max_x = this.isStatic ? this.extraData.max_x : null;
         //cancel the normal movement behavior
         this._doNormalMovement = !this.path;
         //reset movement
@@ -1634,9 +1680,15 @@ var PathParticle = /** @class */ (function (_super) {
         var lerp = this.Particle_update(delta);
         //if the particle died during the update, then don't bother
         if (lerp >= 0 && this.path) {
-            //increase linear movement based on speed
-            var speed = this.speedList.interpolate(lerp) * this.speedMultiplier;
-            this.movement += speed * delta;
+            if (this.isStatic) {
+                // get movement based on random position
+                this.movement = ParticleUtils_1.default.getRandomInt(this.min_x, this.max_x);
+            }
+            else {
+                //increase linear movement based on speed
+                var speed = this.speedList.interpolate(lerp) * this.speedMultiplier;
+                this.movement += speed * delta;
+            }
             //set up the helper point for rotation
             helperPoint.x = this.movement;
             helperPoint.y = this.path(this.movement);
@@ -1678,9 +1730,15 @@ var PathParticle = /** @class */ (function (_super) {
      */
     PathParticle.parseData = function (extraData) {
         var output = {};
+        output.isStatic = false;
         if (extraData && extraData.path) {
             try {
                 output.path = parsePath(extraData.path);
+                if (extraData.isStatic) {
+                    output.isStatic = true;
+                    output.min_x = extraData.min_x;
+                    output.max_x = extraData.max_x;
+                }
             }
             catch (e) {
                 if (ParticleUtils_1.default.verbose)

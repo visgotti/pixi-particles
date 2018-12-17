@@ -36,6 +36,16 @@ const ParticleUtils = {
 	DEG_TO_RADS: Math.PI / 180,
 
 	/**
+	 * Gets random number between two numbers (inclusive)
+	 * @param {Number} minimum number to return
+	 * @param {Number} maximum number to return
+	 */
+
+	getRandomInt(min:number, max:number) {
+		return Math.floor(Math.random() * (max - min + 1)) + min;
+	},
+
+	/**
 	 * Rotates a point by a given angle.
 	 * @method PIXI.particles.ParticleUtils.rotatePoint
 	 * @param {Number} angle The angle to rotate by in degrees
