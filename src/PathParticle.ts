@@ -51,7 +51,7 @@ const WHITELISTER = new RegExp(
  * @param {String} pathString The string to parse.
  * @return {Function} The path function - takes x, outputs y.
  */
-const parsePath = function(pathString: string)
+export const parsePath = function(pathString: string)
 {
 	let matches = pathString.match(WHITELISTER);
 	for(let i = matches.length - 1; i >= 0; --i)
@@ -120,14 +120,23 @@ export default class PathParticle extends Particle
 
 	/**
 	 * Min X you want for your path to contain
-	 * @property {Number} movement
+	 * @property {Number} max_x
 	 */
 	public min_x?: number;
 	/**
 	 * If the path is static and doesn't change depending on time.
-	 * @property {Number} movement
+	 * @property {Number} min_x
 	 */
 	public isStatic: boolean;
+	/**
+	 * If the path is static and doesn't change depending on time.
+	 * @property {boolean} isStatic
+	 */
+	private staticSet: boolean;
+	/**
+	 * Used so the static position doesn't change every update.
+	 * @property {boolean} staticSet
+	 */
 
 
 	constructor(emitter: Emitter)
@@ -138,6 +147,7 @@ export default class PathParticle extends Particle
 		this.initialPosition = new PIXI.Point();
 		this.movement = 0;
 		this.isStatic = false;
+		this.staticSet = false;
 		this.min_x = null;
 		this.max_x = null;
 	}
@@ -159,6 +169,9 @@ export default class PathParticle extends Particle
 
 		// set if the path is static
 		this.isStatic = this.extraData.isStatic;
+
+		// set static set to false upon initialization
+		this.staticSet = false;
 
 		this.min_x = this.isStatic ? this.extraData.min_x : null;
 		this.max_x = this.isStatic ? this.extraData.max_x : null;
@@ -184,8 +197,20 @@ export default class PathParticle extends Particle
 		if(lerp >= 0 && this.path)
 		{
 			if(this.isStatic) {
-				// get movement based on random position
-				this.movement = ParticleUtils.getRandomInt(this.min_x, this.max_x);
+				if(!this.staticSet) {
+					// get movement based on random position
+					this.movement = ParticleUtils.getRandomInt(this.min_x, this.max_x);
+					// set normal movement back to true so particles can continue behavior after static path positions been set
+					this.staticSet = true;
+				} else {
+					this._doNormalMovement = true;
+
+					helperPoint.x = this.movement;
+					helperPoint.y = this.path(this.movement);
+					ParticleUtils.rotatePoint(this.initialRotation, helperPoint);
+
+					return lerp;
+				}
 			} else {
 				//increase linear movement based on speed
 				const speed = this.speedList.interpolate(lerp) * this.speedMultiplier;

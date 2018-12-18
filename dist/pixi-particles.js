@@ -1,6 +1,6 @@
 /*!
  * pixi-particles - v3.1.0
- * Compiled Mon, 17 Dec 2018 19:39:38 UTC
+ * Compiled Tue, 18 Dec 2018 01:53:24 UTC
  *
  * pixi-particles is licensed under the MIT License.
  * http://www.opensource.org/licenses/mit-license
@@ -183,6 +183,7 @@ var ParticleUtils_1 = _dereq_("./ParticleUtils");
 var Particle_1 = _dereq_("./Particle");
 var PropertyNode_1 = _dereq_("./PropertyNode");
 var ticker = PIXI.ticker.shared;
+var PathParticle_1 = _dereq_("./PathParticle");
 var helperPoint = new PIXI.Point();
 /**
  * A particle emitter.
@@ -232,7 +233,9 @@ var Emitter = /** @class */ (function () {
         this.spawnType = null;
         this._spawnFunc = null;
         this.spawnRect = null;
-        this.spawnLine = null;
+        this._spawnPath = null;
+        this.spawnPathData = null;
+        this.spawnInPath = false;
         this.spawnCircle = null;
         this.particlesPerWave = 1;
         this.particleSpacing = 0;
@@ -313,9 +316,9 @@ var Emitter = /** @class */ (function () {
     });
     Object.defineProperty(Emitter.prototype, "parent", {
         /**
-        * The container to add particles to. Settings this will dump any active particles.
-        * @member {PIXI.Container} PIXI.particles.Emitter#parent
-        */
+         * The container to add particles to. Settings this will dump any active particles.
+         * @member {PIXI.Container} PIXI.particles.Emitter#parent
+         */
         get: function () { return this._parent; },
         set: function (value) {
             this.cleanup();
@@ -331,6 +334,7 @@ var Emitter = /** @class */ (function () {
      * @param {Object} config A configuration object containing settings for the emitter.
      */
     Emitter.prototype.init = function (art, config) {
+        var _this = this;
         if (!art || !config)
             return;
         //clean up any existing particles
@@ -430,7 +434,8 @@ var Emitter = /** @class */ (function () {
         // Emitter Properties   //
         //////////////////////////
         //reset spawn type specific settings
-        this.spawnLine = this.spawnRect = this.spawnCircle = null;
+        this.spawnPathData = null;
+        this.spawnRect = this.spawnCircle = null;
         this.particlesPerWave = 1;
         if (config.particlesPerWave && config.particlesPerWave > 1)
             this.particlesPerWave = config.particlesPerWave;
@@ -439,12 +444,6 @@ var Emitter = /** @class */ (function () {
         var spawnCircle;
         //determine the spawn function to use
         switch (config.spawnType) {
-            case "line":
-                this.spawnType = "line";
-                this._spawnFunc = this._spawnLine;
-                var spawnLine = config.spawnLine;
-                this.spawnLine = { startingPoint: spawnLine };
-                break;
             case "rect":
                 this.spawnType = "rect";
                 this._spawnFunc = this._spawnRect;
@@ -492,6 +491,16 @@ var Emitter = /** @class */ (function () {
         this.rotation = 0;
         this.ownerPos = new PIXI.Point();
         this.spawnPos = new PIXI.Point(config.pos.x, config.pos.y);
+        // if we passed in spawnPath this is when we execute the function to reposition the spawnPos
+        // before running spawnFunc each time.
+        if (config.spawnPathData) {
+            var _a = config.spawnPathData, path_1 = _a.path, min_x_1 = _a.min_x, max_x_1 = _a.max_x;
+            this.spawnInPath = true;
+            this._spawnPath = (function () {
+                _this.spawnPath(path_1, min_x_1, max_x_1);
+                _this.updateOwnerPos(config.pos.x, config.pos.y);
+            });
+        }
         this._prevEmitterPos = this.spawnPos.clone();
         //previous emitter position is invalid and should not be used for interpolation
         this._prevPosIsValid = false;
@@ -652,6 +661,9 @@ var Emitter = /** @class */ (function () {
         if (this._prevPosIsValid) {
             prevX = this._prevEmitterPos.x;
             prevY = this._prevEmitterPos.y;
+        }
+        if (this.spawnInPath) {
+            this._spawnPath();
         }
         //store current position of the emitter as local variables
         var curX = this.ownerPos.x + this.spawnPos.x;
@@ -816,6 +828,30 @@ var Emitter = /** @class */ (function () {
         }
     };
     /**
+     * Changes spawn position of a particle based on somewhere within a path passed into config
+     * @method PIXI.particles.Emitter#spawnPath
+     * @private
+     * @param {String} pathString The string to parse.
+     * @param {Number} min_x min value for the path's x to solve for y
+     * @param {Number} max_x max value for the path's x to solve for y
+     */
+    Emitter.prototype.spawnPath = function (pathString, min_x, max_x) {
+        var path;
+        try {
+            path = PathParticle_1.parsePath(pathString);
+        }
+        catch (e) {
+            if (ParticleUtils_1.default.verbose)
+                console.error("PathParticle: error in parsing path expression");
+            return null;
+        }
+        var randomX = ParticleUtils_1.default.getRandomInt(min_x, max_x);
+        helperPoint.x = randomX;
+        helperPoint.y = path(randomX);
+        ParticleUtils_1.default.rotatePoint(this.rotation, helperPoint);
+        this.updateSpawnPos(helperPoint.x, helperPoint.y);
+    };
+    /**
      * Positions a particle for a point type emitter.
      * @method PIXI.particles.Emitter#_spawnPoint
      * @private
@@ -834,30 +870,6 @@ var Emitter = /** @class */ (function () {
         //drop the particle at the emitter's position
         p.position.x = emitPosX;
         p.position.y = emitPosY;
-    };
-    /**
-     * Positions a particle for a rectangle type emitter.
-     * @method PIXI.particles.Emitter# spawnLine
-     * @private
-     * @param {Particle} p The particle to position and rotate.
-     * @param {Number} emitPosX The emitter's x position
-     * @param {Number} emitPosY The emitter's y position
-     * @param {int} i The particle number in the current wave. Not used for this function.
-     */
-    Emitter.prototype._spawnLine = function (p, emitPosX, emitPosY) {
-        //set the initial rotation/direction of the particle based on starting
-        //particle angle and rotation of emitter
-        if (this.minStartRotation == this.maxStartRotation)
-            p.rotation = this.minStartRotation + this.rotation;
-        else
-            p.rotation = Math.random() * (this.maxStartRotation - this.minStartRotation) + this.minStartRotation + this.rotation;
-        //place the particle at a random point in the line
-        helperPoint.x = Math.random() * this.spawnRect.width + this.spawnRect.x;
-        helperPoint.y = Math.random() * this.spawnRect.height + this.spawnRect.y;
-        if (this.rotation !== 0)
-            ParticleUtils_1.default.rotatePoint(this.rotation, helperPoint);
-        p.position.x = emitPosX + helperPoint.x;
-        p.position.y = emitPosY + helperPoint.y;
     };
     /**
      * Positions a particle for a rectangle type emitter.
@@ -1014,7 +1026,7 @@ var Emitter = /** @class */ (function () {
 }());
 exports.default = Emitter;
 
-},{"./Particle":3,"./ParticleUtils":4,"./PropertyNode":7}],3:[function(_dereq_,module,exports){
+},{"./Particle":3,"./ParticleUtils":4,"./PathParticle":5,"./PropertyNode":7}],3:[function(_dereq_,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = Object.setPrototypeOf ||
@@ -1600,7 +1612,7 @@ var WHITELISTER = new RegExp([
  * @param {String} pathString The string to parse.
  * @return {Function} The path function - takes x, outputs y.
  */
-var parsePath = function (pathString) {
+exports.parsePath = function (pathString) {
     var matches = pathString.match(WHITELISTER);
     for (var i = matches.length - 1; i >= 0; --i) {
         if (MATH_FUNCS.indexOf(matches[i]) >= 0)
@@ -1636,6 +1648,10 @@ var parsePath = function (pathString) {
  */
 var PathParticle = /** @class */ (function (_super) {
     __extends(PathParticle, _super);
+    /**
+     * Used so the static position doesn't change every update.
+     * @property {boolean} staticSet
+     */
     function PathParticle(emitter) {
         var _this = _super.call(this, emitter) || this;
         _this.path = null;
@@ -1643,6 +1659,7 @@ var PathParticle = /** @class */ (function (_super) {
         _this.initialPosition = new PIXI.Point();
         _this.movement = 0;
         _this.isStatic = false;
+        _this.staticSet = false;
         _this.min_x = null;
         _this.max_x = null;
         return _this;
@@ -1661,6 +1678,8 @@ var PathParticle = /** @class */ (function (_super) {
         this.path = this.extraData.path;
         // set if the path is static
         this.isStatic = this.extraData.isStatic;
+        // set static set to false upon initialization
+        this.staticSet = false;
         this.min_x = this.isStatic ? this.extraData.min_x : null;
         this.max_x = this.isStatic ? this.extraData.max_x : null;
         //cancel the normal movement behavior
@@ -1681,8 +1700,19 @@ var PathParticle = /** @class */ (function (_super) {
         //if the particle died during the update, then don't bother
         if (lerp >= 0 && this.path) {
             if (this.isStatic) {
-                // get movement based on random position
-                this.movement = ParticleUtils_1.default.getRandomInt(this.min_x, this.max_x);
+                if (!this.staticSet) {
+                    // get movement based on random position
+                    this.movement = ParticleUtils_1.default.getRandomInt(this.min_x, this.max_x);
+                    // set normal movement back to true so particles can continue behavior after static path positions been set
+                    this.staticSet = true;
+                }
+                else {
+                    this._doNormalMovement = true;
+                    helperPoint.x = this.movement;
+                    helperPoint.y = this.path(this.movement);
+                    ParticleUtils_1.default.rotatePoint(this.initialRotation, helperPoint);
+                    return lerp;
+                }
             }
             else {
                 //increase linear movement based on speed
@@ -1733,7 +1763,7 @@ var PathParticle = /** @class */ (function (_super) {
         output.isStatic = false;
         if (extraData && extraData.path) {
             try {
-                output.path = parsePath(extraData.path);
+                output.path = exports.parsePath(extraData.path);
                 if (extraData.isStatic) {
                     output.isStatic = true;
                     output.min_x = extraData.min_x;
