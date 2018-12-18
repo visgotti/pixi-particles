@@ -13,24 +13,24 @@ const helperPoint = new PIXI.Point();
 //a hand picked list of Math functions (and a couple properties) that are allowable.
 //they should be used without the preceding "Math."
 const MATH_FUNCS =
-[
-	"pow",
-	"sqrt",
-	"abs",
-	"floor",
-	"round",
-	"ceil",
-	"E",
-	"PI",
-	"sin",
-	"cos",
-	"tan",
-	"asin",
-	"acos",
-	"atan",
-	"atan2",
-	"log"
-];
+	[
+		"pow",
+		"sqrt",
+		"abs",
+		"floor",
+		"round",
+		"ceil",
+		"E",
+		"PI",
+		"sin",
+		"cos",
+		"tan",
+		"asin",
+		"acos",
+		"atan",
+		"atan2",
+		"log"
+	];
 //create an actual regular expression object from the string
 const WHITELISTER = new RegExp(
 	[
@@ -112,33 +112,6 @@ export default class PathParticle extends Particle
 	 */
 	public movement: number;
 
-	/**
-	 * Max X you want for your path function to contain
-	 * @property {Number} movement
-	 */
-	public max_x?: number;
-
-	/**
-	 * Min X you want for your path to contain
-	 * @property {Number} max_x
-	 */
-	public min_x?: number;
-	/**
-	 * If the path is static and doesn't change depending on time.
-	 * @property {Number} min_x
-	 */
-	public isStatic: boolean;
-	/**
-	 * If the path is static and doesn't change depending on time.
-	 * @property {boolean} isStatic
-	 */
-	private staticSet: boolean;
-	/**
-	 * Used so the static position doesn't change every update.
-	 * @property {boolean} staticSet
-	 */
-
-
 	constructor(emitter: Emitter)
 	{
 		super(emitter);
@@ -146,10 +119,6 @@ export default class PathParticle extends Particle
 		this.initialRotation = 0;
 		this.initialPosition = new PIXI.Point();
 		this.movement = 0;
-		this.isStatic = false;
-		this.staticSet = false;
-		this.min_x = null;
-		this.max_x = null;
 	}
 
 	/**
@@ -166,16 +135,6 @@ export default class PathParticle extends Particle
 
 		//set the path for the particle
 		this.path = this.extraData.path;
-
-		// set if the path is static
-		this.isStatic = this.extraData.isStatic;
-
-		// set static set to false upon initialization
-		this.staticSet = false;
-
-		this.min_x = this.isStatic ? this.extraData.min_x : null;
-		this.max_x = this.isStatic ? this.extraData.max_x : null;
-
 		//cancel the normal movement behavior
 		this._doNormalMovement = !this.path;
 		//reset movement
@@ -196,27 +155,9 @@ export default class PathParticle extends Particle
 		//if the particle died during the update, then don't bother
 		if(lerp >= 0 && this.path)
 		{
-			if(this.isStatic) {
-				if(!this.staticSet) {
-					// get movement based on random position
-					this.movement = ParticleUtils.getRandomInt(this.min_x, this.max_x);
-					// set normal movement back to true so particles can continue behavior after static path positions been set
-					this.staticSet = true;
-				} else {
-					this._doNormalMovement = true;
-
-					helperPoint.x = this.movement;
-					helperPoint.y = this.path(this.movement);
-					ParticleUtils.rotatePoint(this.initialRotation, helperPoint);
-
-					return lerp;
-				}
-			} else {
-				//increase linear movement based on speed
-				const speed = this.speedList.interpolate(lerp) * this.speedMultiplier;
-				this.movement += speed * delta;
-			}
-
+			//increase linear movement based on speed
+			const speed = this.speedList.interpolate(lerp) * this.speedMultiplier;
+			this.movement += speed * delta;
 			//set up the helper point for rotation
 			helperPoint.x = this.movement;
 			helperPoint.y = this.path(this.movement);
@@ -226,7 +167,7 @@ export default class PathParticle extends Particle
 		}
 		return lerp;
 	}
-	
+
 	/**
 	 * Destroys the particle, removing references and preventing future use.
 	 * @method PIXI.particles.PathParticle#destroy
@@ -261,20 +202,14 @@ export default class PathParticle extends Particle
 	 * @param  {Object} extraData The extra data from the particle config.
 	 * @return {Object} The parsed extra data.
 	 */
-	public static parseData(extraData: {path:string, isStatic:boolean, min_x:number, max_x:number})
+	public static parseData(extraData: {path:string})
 	{
 		let output: any = {};
-		output.isStatic = false;
 		if(extraData && extraData.path)
 		{
 			try
 			{
 				output.path = parsePath(extraData.path);
-				if(extraData.isStatic) {
-					output.isStatic = true;
-					output.min_x = extraData.min_x;
-					output.max_x = extraData.max_x;
-				}
 			}
 			catch(e)
 			{
