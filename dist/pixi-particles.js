@@ -1,6 +1,6 @@
 /*!
  * pixi-particles - v3.1.0
- * Compiled Tue, 18 Dec 2018 01:53:24 UTC
+ * Compiled Tue, 18 Dec 2018 02:09:42 UTC
  *
  * pixi-particles is licensed under the MIT License.
  * http://www.opensource.org/licenses/mit-license
@@ -1648,20 +1648,12 @@ exports.parsePath = function (pathString) {
  */
 var PathParticle = /** @class */ (function (_super) {
     __extends(PathParticle, _super);
-    /**
-     * Used so the static position doesn't change every update.
-     * @property {boolean} staticSet
-     */
     function PathParticle(emitter) {
         var _this = _super.call(this, emitter) || this;
         _this.path = null;
         _this.initialRotation = 0;
         _this.initialPosition = new PIXI.Point();
         _this.movement = 0;
-        _this.isStatic = false;
-        _this.staticSet = false;
-        _this.min_x = null;
-        _this.max_x = null;
         return _this;
     }
     /**
@@ -1676,12 +1668,6 @@ var PathParticle = /** @class */ (function (_super) {
         this.Particle_init();
         //set the path for the particle
         this.path = this.extraData.path;
-        // set if the path is static
-        this.isStatic = this.extraData.isStatic;
-        // set static set to false upon initialization
-        this.staticSet = false;
-        this.min_x = this.isStatic ? this.extraData.min_x : null;
-        this.max_x = this.isStatic ? this.extraData.max_x : null;
         //cancel the normal movement behavior
         this._doNormalMovement = !this.path;
         //reset movement
@@ -1699,26 +1685,9 @@ var PathParticle = /** @class */ (function (_super) {
         var lerp = this.Particle_update(delta);
         //if the particle died during the update, then don't bother
         if (lerp >= 0 && this.path) {
-            if (this.isStatic) {
-                if (!this.staticSet) {
-                    // get movement based on random position
-                    this.movement = ParticleUtils_1.default.getRandomInt(this.min_x, this.max_x);
-                    // set normal movement back to true so particles can continue behavior after static path positions been set
-                    this.staticSet = true;
-                }
-                else {
-                    this._doNormalMovement = true;
-                    helperPoint.x = this.movement;
-                    helperPoint.y = this.path(this.movement);
-                    ParticleUtils_1.default.rotatePoint(this.initialRotation, helperPoint);
-                    return lerp;
-                }
-            }
-            else {
-                //increase linear movement based on speed
-                var speed = this.speedList.interpolate(lerp) * this.speedMultiplier;
-                this.movement += speed * delta;
-            }
+            //increase linear movement based on speed
+            var speed = this.speedList.interpolate(lerp) * this.speedMultiplier;
+            this.movement += speed * delta;
             //set up the helper point for rotation
             helperPoint.x = this.movement;
             helperPoint.y = this.path(this.movement);
@@ -1760,15 +1729,9 @@ var PathParticle = /** @class */ (function (_super) {
      */
     PathParticle.parseData = function (extraData) {
         var output = {};
-        output.isStatic = false;
         if (extraData && extraData.path) {
             try {
                 output.path = exports.parsePath(extraData.path);
-                if (extraData.isStatic) {
-                    output.isStatic = true;
-                    output.min_x = extraData.min_x;
-                    output.max_x = extraData.max_x;
-                }
             }
             catch (e) {
                 if (ParticleUtils_1.default.verbose)
